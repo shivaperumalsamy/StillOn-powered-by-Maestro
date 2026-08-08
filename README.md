@@ -215,9 +215,9 @@ services/monitor/         # disruption ingestion + subscription lifecycle
 mcp/assistant/            # PUBLIC northbound Assistant MCP surface
 mcp/{itinerary,flight,dining,entertainment,mobility,notify}/
 packages/policy-engine/   # deterministic enforcement; NOT model-callable
-packages/contracts/       # MCP tool JSON Schemas; single source of truth
-packages/generated/       # codegen from openapi.yaml; never hand-edited
-specs/001-stillon-core/   # spec-kit artifacts + contracts/openapi.yaml
+packages/contracts/       # stable contract SSOT: openapi.yaml + MCP schemas
+packages/generated/       # codegen from contracts/; never hand-edited
+specs/001-stillon-core/   # spec-kit artifacts (contracts never live here)
 .specify/                 # spec-kit scaffolding; memory/constitution.md
 infrastructure/           # terraform, including the observability dashboard
 tests/                    # unit, contract, integration, e2e, eval
@@ -286,7 +286,7 @@ The build sequence, using GitHub Spec Kit:
 1. A human initializes the repo once: `specify init . --integration claude`.
 2. `/speckit.constitution` derives `.specify/memory/constitution.md` from the non-negotiable principles, which the workflow then enforces on itself.
 3. `/speckit.specify` produces requirements — what and why, no technology choices.
-4. `/speckit.plan` produces the design, data model, sequence flows for all eight failure scenarios, and a contract-first `openapi.yaml` written *before* any code.
+4. `/speckit.plan` produces the design, data model, sequence flows for all eight failure scenarios, and a contract-first `packages/contracts/openapi.yaml` written *before* any code — at a stable path, so codegen never needs reconfiguring when a feature is added.
 5. `/speckit.tasks` produces a dependency-ordered plan where every task names its governing requirement and its verification command.
 6. `/speckit.implement` executes it in bounded phases, running the test suites after each one.
 

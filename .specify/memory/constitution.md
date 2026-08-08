@@ -1,5 +1,63 @@
 <!--
-Sync Impact Report:
+Sync Impact Report (1.0.4, 2026-08-08):
+- Version change: 1.0.3 → 1.0.4 (PATCH: additive observability pin; no principle weakened, removed,
+  or reinterpreted).
+- Added: LLM-call observability. Section 20 mandates eval thresholds (tool-selection accuracy,
+  unsupported-action rate, conflict-identification accuracy) that span/metric/log telemetry cannot
+  evidence — nothing captured what the model proposed or why it was refused. Model calls are now
+  recorded as OTel spans with token counts, cost, proposed option labels, and Policy Engine verdicts,
+  with capture of prompts and completions gated behind the redaction filter.
+- A dedicated LLM-observability tool (e.g. Langfuse) is permitted only self-hosted inside the account
+  boundary and collector-fed; it is NOT an agent framework and is not covered by the 1.0.3
+  prohibition. A vendor SDK in application code remains forbidden by the OTLP-only rule.
+- Governance note: AGENTS.md Section 15 was updated first; this file follows.
+
+Sync Impact Report (1.0.3, 2026-08-08):
+- Version change: 1.0.2 → 1.0.3 (PATCH: additive stack pins; no principle weakened, removed, or
+  reinterpreted).
+- Added: "no agent framework" as an explicit prohibition. Previously implicit — the stack named the
+  MCP SDK, Bedrock, and a hand-written state machine but never forbade a framework, so an
+  implementer could have added one without breaking any written rule. A framework that owns the
+  agent loop would make in-handler authorization and the single-LLM-component boundary unauditable.
+- Added: telemetry pipeline. OpenTelemetry and CloudWatch were both named, but CloudWatch does not
+  ingest OTLP traces, so the two did not compose into a working pipeline. Now pinned: OTLP-only from
+  application code, ADOT collector sidecar, X-Ray for traces, CloudWatch for logs and metrics,
+  Jaeger locally, and mandatory sampling of any trace rooted at a `disruption` event.
+- Governance note: AGENTS.md Sections 15, 17, and 19 were updated first; this file follows.
+
+Sync Impact Report (1.0.2, 2026-08-08):
+- Version change: 1.0.1 → 1.0.2 (PATCH: contract-path relocation; no principle weakened, removed,
+  or reinterpreted).
+- Contract path moved from `specs/001-stillon-core/contracts/openapi.yaml` to the stable,
+  feature-independent `packages/contracts/openapi.yaml`. Rationale: a per-feature contract path
+  forces the codegen configuration to be edited whenever a numbered feature is added, which makes
+  the generated-code CI gate fragile. `packages/contracts/` was already the MCP-schema SSOT, so this
+  consolidates every contract behind one path codegen reads and never has to relearn.
+- Supersedes the 1.0.0 note "Contract path: AGENTS.md pins specs/001-stillon-core/contracts/..." —
+  that constraint no longer applies. Contracts MUST NEVER live under `specs/<feature>/`; if Spec Kit
+  scaffolds one, it is a scratch staging area and the authoritative file lands at the stable path.
+  `docs/contracts/openapi.yaml` remains NOT adopted: an OpenAPI spec that generates code is a build
+  input, not documentation.
+- Templates requiring updates: `.specify/templates/plan-template.md` — its file-tree section MUST
+  name `packages/contracts/openapi.yaml` and `packages/generated/`, NOT a per-feature contracts dir.
+  This supersedes the 1.0.0 template note below.
+- Governance note: AGENTS.md Sections 12, 16, 17, and 18 were corrected first; this file follows.
+
+Sync Impact Report (1.0.1, 2026-08-08):
+- Version change: 1.0.0 → 1.0.1 (PATCH: clarifications and additive stack pins; no principle
+  weakened, removed, or reinterpreted).
+- Reconciled two clauses that had drifted from AGENTS.md after its rounds 4-6 revisions:
+  - Deployment: `/readiness` no longer includes partner MCP reachability; partner health moves to a
+    separate `/dependencies` endpoint that MUST NEVER fail readiness (AGENTS.md Section 22).
+  - Authorization: "chain version check" replaced by the entity-appropriate version check —
+    `workflow_version` for approvals and workflow transitions, `chain_version` for chain mutations
+    (AGENTS.md Section 9).
+- Added: Build and test toolchain pins mirroring AGENTS.md Section 17 (uv, pytest + pytest-cov,
+  asyncio, alembic, Node LTS + pnpm, GitHub Actions, slim non-root multi-stage containers).
+- Governance note: both reconciliations follow the amendment rule — AGENTS.md was corrected first,
+  and this file was brought into agreement with it.
+
+Sync Impact Report (1.0.0, 2026-08-07):
 - Version change: TEMPLATE (unfilled) → 1.0.0
 - Rationale: Initial ratification. The file previously contained only placeholder tokens; this is
   the first concrete constitution, seeded from AGENTS.md Section 2 principles plus the pinned
@@ -79,11 +137,15 @@ any channel, nothing else in this document matters.
 
 ### III. Contract-First / API-First Architecture
 **The schema is the single source of truth; code is generated from it, never the reverse.**
-- `specs/001-stillon-core/contracts/openapi.yaml` is the SSOT for the REST surface and MUST be
+- `packages/contracts/openapi.yaml` is the SSOT for the REST surface and MUST be
   authored and reviewed **before any implementation code** for that surface exists.
-- `packages/contracts/` is the SSOT for all MCP tool JSON Schemas. Servers, services, and tests
+- `packages/contracts/` is the SSOT for all contracts — the REST `openapi.yaml` and every MCP tool
+  JSON Schema — at a stable, feature-independent path. Contracts MUST NEVER live under
+  `specs/<feature>/`, and codegen configuration MUST NOT require editing when a feature is added.
+  Servers, services, and tests
   MUST import from it. **A schema defined twice is a defect.**
-- Backend Pydantic models MUST be generated from `openapi.yaml` with datamodel-code-generator; the
+- Backend Pydantic models MUST be generated from `packages/contracts/openapi.yaml` with
+  datamodel-code-generator; the
   frontend TypeScript client MUST be generated with OpenAPI Generator (`typescript-fetch`).
   Generator versions and configuration MUST be pinned in `plan.md`.
 - Generated output lives under `packages/generated/` and MUST NEVER be hand-edited. `make
@@ -126,7 +188,8 @@ any channel, nothing else in this document matters.
 - Every lifecycle transition MUST be logged as
   `{entity, from, to, reason, chain_id, disruption_id, plan_id, tool_call_id, correlation_id,
   chain_version}`. **An unlogged transition is a defect.**
-- OpenTelemetry traces MUST span channel adapter -> API -> orchestrator -> MCP server -> partner,
+- OpenTelemetry traces (OTLP only, exported via the ADOT collector) MUST span channel adapter ->
+  API -> orchestrator -> MCP server -> partner,
   one trace per disruption. A log line or span missing an available correlation ID is a defect.
 - The metrics in AGENTS.md Section 15 MUST be emitted and surfaced on the Terraform-defined
   CloudWatch dashboard under `infrastructure/observability/`.
@@ -150,8 +213,9 @@ any channel, nothing else in this document matters.
   adapter's user to the login screen; the adapter MUST NOT retry silently or degrade to an
   unauthenticated path.
 - **Authorization on every state-changing endpoint:** authenticated caller, ownership check that the
-  caller is the trip owner for the `chain_id`, chain version check, policy check. No unauthenticated
-  mutation MAY exist. Rate limits are mandatory on guest-facing and public MCP endpoints.
+  caller is the trip owner for the `chain_id`, the version check appropriate to the entity
+  (`workflow_version` for approvals and workflow transitions, `chain_version` for chain mutations),
+  policy check. No unauthenticated mutation MAY exist. Rate limits are mandatory on guest-facing and public MCP endpoints.
 - **Schema validation both directions:** every MCP tool input *and* output MUST be validated against
   its versioned schema and rejected with `VALIDATION_ERROR` on type mismatch or
   `additionalProperties`. A malformed partner response is a failure, not data.
@@ -215,8 +279,9 @@ any channel, nothing else in this document matters.
   Redis, Secrets Manager, CloudWatch). Dockerfiles, compose files, and service startup scripts are
   mandatory deliverables.
 - Automated deployment targets **staging only**. Every service MUST expose `/health` (liveness) and
-  `/readiness` (PostgreSQL, Redis, and each MCP server reachable); ECS target health MUST use
-  `/readiness`. `make smoke-staging` MUST run after every deploy, and a failure MUST trigger
+  `/readiness` (owned critical dependencies only — PostgreSQL, Redis, required internal
+  queue/state); ECS target health MUST use `/readiness`. Partner MCP health and circuit-breaker
+  state MUST be reported by a separate `/dependencies` endpoint and MUST NEVER fail readiness. `make smoke-staging` MUST run after every deploy, and a failure MUST trigger
   rollback to the previous ECS task definition revision.
 - `make deploy-production` MUST fail closed when `APPROVED_BY` and `APPROVAL_TICKET` are absent, and
   no automation MAY invoke it. Rationale: production deployment is irreversible and reserved for
@@ -267,6 +332,25 @@ outlive their disruption.
   deterministic fake provider for unit, contract, and most integration tests.
 - **State:** PostgreSQL 16 authoritative. Redis 7 for cache, distributed locks, and expiring holds
   only — **never** authoritative booking state.
+- **Agent framework:** none. Maestro is a bespoke orchestrator — the AGENTS.md Section 9 state
+  machine, the MCP Python SDK for tool transport, and Bedrock behind the model provider interface.
+  Libraries that own the agent loop, hide tool dispatch, or manage conversation state (LangChain,
+  LangGraph, LlamaIndex, CrewAI, AutoGen, Bedrock Agents, and equivalents) MUST NOT be introduced:
+  in-handler authorization and the single-LLM-component boundary are auditable only while we own the
+  loop.
+- **Telemetry:** application code emits OTLP only and MUST NOT call a vendor telemetry SDK. An ADOT
+  collector sidecar exports traces to AWS X-Ray, with logs and metrics to CloudWatch; local runs use
+  an OTLP collector plus Jaeger. Any trace rooted at a `disruption` event MUST be sampled. Every
+  model call MUST be recorded as an OTel span with model id, token counts, latency, cost in cents,
+  proposed option labels, and the Policy Engine verdict; prompts and completions MAY be captured
+  only after the redaction filter. A dedicated LLM-observability tool is permitted only when
+  self-hosted inside the account boundary and fed from the collector, never by a vendor SDK in
+  application code.
+- **Build and test toolchain:** `uv` (committed `uv.lock`); `pytest` + `pytest-cov` as the sole
+  coverage measurement; `asyncio` with no blocking I/O in request, tool, or adapter paths;
+  `alembic` migrations, forward and reversible, never destructive against append-only audit tables;
+  current Node LTS pinned in `.nvmrc` with `pnpm`; GitHub Actions invoking only AGENTS.md Section 19
+  `make` targets; multi-stage containers on `python:3.12-slim` running as a non-root user.
 - **Substitutable only with a documented rationale in `plan.md`:** web framework (FastAPI default)
   and the frontend (minimal React or server-rendered, demo UX only).
 
@@ -329,4 +413,4 @@ southbound partner tool reachable through the northbound surface; an approval re
 authenticated version-checked API endpoint; success reported without read-back verification; a
 deleted or skipped test; a commit to `main` without a `CHANGELOG.md` entry.
 
-**Version**: 1.0.0 | **Ratified**: 2026-08-07 | **Last Amended**: 2026-08-07
+**Version**: 1.0.4 | **Ratified**: 2026-08-07 | **Last Amended**: 2026-08-08
