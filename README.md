@@ -216,7 +216,7 @@ mcp/assistant/            # PUBLIC northbound Assistant MCP surface
 mcp/{itinerary,flight,dining,entertainment,mobility,notify}/
 packages/policy-engine/   # deterministic enforcement; NOT model-callable
 packages/contracts/       # stable contract SSOT: openapi.yaml + MCP schemas
-packages/generated/       # codegen from contracts/; never hand-edited
+packages/generated/       # git-ignored; regenerated at build time
 specs/001-stillon-core/   # spec-kit artifacts (contracts never live here)
 .specify/                 # spec-kit scaffolding; memory/constitution.md
 infrastructure/           # terraform, including the observability dashboard

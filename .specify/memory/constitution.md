@@ -1,4 +1,30 @@
 <!--
+Sync Impact Report (1.0.6, 2026-08-08):
+- Version change: 1.0.5 → 1.0.6 (MINOR-equivalent change recorded as PATCH: no principle weakened,
+  but the drift-detection MECHANISM changed and reviewers must notice).
+- Generated sources are no longer committed; `packages/generated/` is git-ignored and produced at
+  build time by a dedicated Docker codegen stage whose output is copied into the runtime image.
+- Consequence, stated so it is not lost: "fail CI on an uncommitted regeneration diff" no longer
+  works, because there is no committed artifact to diff. It is replaced by three checks — generation
+  must succeed, must be byte-identical across two runs (determinism), and typecheck must pass
+  against freshly generated output, so a renamed contract field fails `mypy --strict` or `tsc`.
+  Images are labelled with the SHA-256 of `packages/contracts/` for traceability.
+- Added violation: committing `packages/generated/` to version control.
+- Governance note: AGENTS.md Sections 17, 18, 19, and 20 were updated first; this file follows.
+
+Sync Impact Report (1.0.5, 2026-08-08):
+- Version change: 1.0.4 → 1.0.5 (PATCH: codegen execution and layout clarifications; no principle
+  weakened, removed, or reinterpreted).
+- Clarified that one contract feeds TWO generators across two language ecosystems, and closed three
+  gaps that would have broken a clean build:
+  - OpenAPI Generator is a JVM tool while the pinned toolchain has no JDK; it MUST now run via its
+    official Docker image pinned by digest.
+  - `packages/generated/` MUST split into `python/` (uv workspace member) and `ts/` (pnpm workspace
+    package) so both toolchains can install their half.
+  - MCP tool JSON Schemas MUST also be generated, not hand-mirrored, closing the "a schema defined
+    twice is a defect" loophole that applied only to openapi.yaml before.
+- Governance note: AGENTS.md Sections 17 and 18 were updated first; this file follows.
+
 Sync Impact Report (1.0.4, 2026-08-08):
 - Version change: 1.0.3 → 1.0.4 (PATCH: additive observability pin; no principle weakened, removed,
   or reinterpreted).
@@ -89,8 +115,8 @@ Sync Impact Report (1.0.0, 2026-08-07):
   - "All code MUST use relative imports": omitted; incompatible with the pinned Python 3.12
     package layout. Replaced by the single-source-of-truth import rule in Principle III.
 - Templates requiring updates:
-  - .specify/templates/plan-template.md (pending: ensure the file-tree section names
-    `specs/[###-feature]/contracts/openapi.yaml` and `packages/generated/` explicitly)
+  - .specify/templates/plan-template.md (SUPERSEDED by the 1.0.2 report above: the file-tree
+    section must name `packages/contracts/openapi.yaml`, never a per-feature contracts dir)
 - Deferred items: none. No TODO placeholders remain.
 -->
 # StillOn (powered by Maestro) Constitution
@@ -144,12 +170,21 @@ any channel, nothing else in this document matters.
   `specs/<feature>/`, and codegen configuration MUST NOT require editing when a feature is added.
   Servers, services, and tests
   MUST import from it. **A schema defined twice is a defect.**
-- Backend Pydantic models MUST be generated from `packages/contracts/openapi.yaml` with
-  datamodel-code-generator; the
+- Backend Pydantic models MUST be generated with datamodel-code-generator from
+  `packages/contracts/openapi.yaml` **and** from every MCP tool JSON Schema in the same directory; a
+  hand-written model mirroring a generated schema is a "defined twice" defect. OpenAPI Generator
+  MUST run only via its official Docker image pinned by digest — never as a host binary, since the
+  pinned toolchain carries no JDK. Generated output MUST be split into `packages/generated/python/`
+  (a `uv` workspace member) and `packages/generated/ts/` (a `pnpm` workspace package). The
   frontend TypeScript client MUST be generated with OpenAPI Generator (`typescript-fetch`).
   Generator versions and configuration MUST be pinned in `plan.md`.
-- Generated output lives under `packages/generated/` and MUST NEVER be hand-edited. `make
-  codegen-check` MUST fail CI when regeneration produces an uncommitted diff.
+- Generated output lives under `packages/generated/`, MUST NEVER be hand-edited, and MUST NOT be
+  committed — the directory is git-ignored. `make codegen-check` MUST regenerate twice into clean
+  temporary directories and MUST fail CI when generation errors, when the two runs differ
+  byte-for-byte, or when typecheck fails against freshly generated output. Image builds MUST run a
+  dedicated codegen stage and copy its output into the runtime stage; no generator, JDK, or contract
+  file MAY survive into the runtime layer, and no image MAY depend on a developer's working tree.
+  Every build MUST label the image with the SHA-256 of `packages/contracts/`.
 - All partner integrations MUST use versioned, schema-validated contracts. Every MCP tool MUST
   declare input schema, output schema, typed error model, timeout, retry policy, and idempotency
   behavior. Every mock MUST be swappable for a live adapter **by configuration alone**, with no
@@ -408,9 +443,10 @@ boundary MUST re-verify the pinned constraints. Complexity MUST be justified in 
 
 **Violations that MUST be rejected outright:** hardcoded or logged secrets; raw PII in tables, logs,
 traces, or prompts; implementation code edited ahead of its governing contract; hand-edited
-`packages/generated/`; a mutation handler that does not invoke the Policy Engine server-side; a
+`packages/generated/` or a commit that adds `packages/generated/` to version control; a mutation
+handler that does not invoke the Policy Engine server-side; a
 southbound partner tool reachable through the northbound surface; an approval recorded outside the
 authenticated version-checked API endpoint; success reported without read-back verification; a
 deleted or skipped test; a commit to `main` without a `CHANGELOG.md` entry.
 
-**Version**: 1.0.4 | **Ratified**: 2026-08-07 | **Last Amended**: 2026-08-08
+**Version**: 1.0.6 | **Ratified**: 2026-08-07 | **Last Amended**: 2026-08-08
